@@ -77,8 +77,8 @@ We need some data to start experimenting with RDDs. Let's create some sample dat
 
 
 ```python
-data = None
-len(data)
+nums = list(range(1,1001))
+len(nums)
 
 # 1000
 ```
@@ -94,14 +94,15 @@ To initialize an RDD, first import `pyspark` and then create a SparkContext assi
 
 ```python
 
-sc = None
+import pyspark
+sc = pyspark.SparkContext('local[*]', 'RDD practice')
 ```
 
 Once you've created the SparkContext, you can use the `.parallelize()` method to create an RDD that will distribute the list of numbers across multiple cores. Here, create one called `rdd` with 10 partitions using `data` as the collection you are parallelizing.
 
 
 ```python
-rdd = None
+rdd = sc.parallelize(nums, numSlices=10)
 print(type(rdd))
 # <class 'pyspark.rdd.RDD'>
 ```
@@ -129,25 +130,25 @@ It's important to note that in a big data context, calling the collect method wi
 
 ```python
 # count
-
+rdd.count()
 ```
 
 
 ```python
 # first
-
+rdd.first()
 ```
 
 
 ```python
 # take
-
+rdd.take(10)
 ```
 
 
 ```python
 # top
-
+rdd.top(10)
 ```
 
 
@@ -155,7 +156,8 @@ It's important to note that in a big data context, calling the collect method wi
 # collect
 ## Note: When you are dealing with big data, this could make your computer crash!
 ## It's best to avoid using the collect() method
-
+## Note: When you are dealing with big data, this could make your computer crash! It's best to avoid using the collect() method
+rdd.collect()
 ```
 
 ## Map functions
@@ -177,7 +179,8 @@ We now have sales prices for 1000 items currently for sale at BuyStuff. Now crea
 
 
 ```python
-price_items = None
+price_items = sc.parallelize(sales_figures, numSlices=10)
+price_items.take(4)
 
 ```
 
@@ -192,9 +195,9 @@ Apply that function to the RDD by using the `.map()` method and assign it to a v
 
 ```python
 def sales_tax(num):
-    pass
+    return num / 1.08
 
-revenue_minus_tax = None
+revenue_minus_tax = price_items.map(sales_tax)
 ```
 
 Remember, Spark has __lazy evaluation__, which means that the `sales_tax()` function is a transformer that is not executed until you call an action. Use one of the collection methods to execute the transformer now a part of the RDD and observe the contents of the `revenue_minus_tax` RDD.
@@ -202,6 +205,7 @@ Remember, Spark has __lazy evaluation__, which means that the `sales_tax()` func
 
 ```python
 # perform action to retrieve rdd values
+revenue_minus_tax.take(10)
 ```
 
 ### Lambda Functions
@@ -210,7 +214,7 @@ Note that you can also use lambda functions if you want to quickly perform simpl
 
 
 ```python
-discounted = None
+discounted = revenue_minus_tax.map(lambda x : x*0.9)
 ```
 
 
@@ -224,7 +228,7 @@ You are also able to chain methods together with Spark. In one line, remove the 
 
 
 ```python
-
+price_items.map(sales_tax).map(lambda x : x*0.9).top(15)
 ```
 
 ## RDD Lineage
@@ -234,7 +238,7 @@ We are able to see the full lineage of all the operations that have been perform
 
 
 ```python
-
+discounted.toDebugString()
 ```
 
 ### Map vs. Flatmap
@@ -243,7 +247,7 @@ Depending on how you want your data to be outputted, you might want to use `.fla
 
 
 ```python
-mapped =None
+mapped = price_items.map(lambda x: (x, x / 1.08 * 0.9))
 print(mapped.count())
 print(mapped.take(10))
 ```
@@ -252,7 +256,7 @@ Note that we have 1000 tuples created to our specification. Let's take a look at
 
 
 ```python
-flat_mapped = None
+flat_mapped = price_items.flatMap(lambda x : (x, x / 1.08 * 0.9 ))
 print(flat_mapped.count())
 print(flat_mapped.take(10))
 ```
@@ -268,7 +272,8 @@ After meeting with some external consultants, BuyStuff has determined that its b
 
 ```python
 # use the filter function
-selected_items = None
+selected_items = discounted.filter(lambda x: x > 300)
+selected_items.count()
 
 # calculate total remaining in inventory 
 
@@ -287,7 +292,7 @@ Now it's time to figure out how much money BuyStuff would make from selling one 
 
 
 ```python
-
+selected_items.reduce(lambda x, y: x + y)
 ```
 
 The time has come for BuyStuff to open up shop and start selling its goods. It only has one of each item, but it's allowing 50 lucky users to buy as many items as they want while they remain in stock. Within seconds, BuyStuff is sold out. Below, you'll find the sales data in an RDD with tuples of (user, item bought).
@@ -311,20 +316,23 @@ To do this we can use a method called `.reduceByKey()` to perform reducing opera
 
 ```python
 # calculate how much each user spent
+total_spent = sales_data.reduceByKey(lambda x, y: x + y)
+total_spent.take(10)
 ```
 
 
 ```python
 # sort the users from highest to lowest spenders
-
+total_spent.sortBy(lambda x: x[1], ascending = False).collect()
 ```
 
 Next, let's determine how many items were bought per user. This can be solved in one line using an RDD method. After you've counted the total number of items bought per person, sort the users from most number of items bought to least number of items. Time to start a customer loyalty program!
 
 
 ```python
-
+sorted(sales_data.countByKey().items(), key=lambda kv:kv[1], reverse=True)
 ```
+total_spent.sortBy(lambda x: x[1], ascending = False).collect()
 
 ### Stop the SparkContext
 
@@ -332,7 +340,7 @@ Now that we are finished with our analysis, stop the `sc`.
 
 
 ```python
-
+sc.stop()
 ```
 
 ### Additional Reading
